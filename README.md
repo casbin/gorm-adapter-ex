@@ -1,19 +1,31 @@
-Gorm Adapter
+Gorm Adapter Ex
 ====
+This gorm-adapter-ex is an extended version of [Gorm-Adapter](https://github.com/casbin/gorm-adapter).
+It introduces great and implements [proposal of customizability](https://github.com/casbin/gorm-adapter/issues/180) by reflection. The database structure can be arbitrary as long as it has `{"ID", "Ptype", "V0"}` three fields.
 
-> In v3.0.3, method `NewAdapterByDB` creates table named `casbin_rules`,  
-> we fix it to `casbin_rule` after that.  
-> If you used v3.0.3 and less, and you want to update it,  
-> you might need to *migrate* data manually.
-> Find out more at: https://github.com/casbin/gorm-adapter/issues/78
+```golang
+	type TestCasbinRule struct { //arbitrary number of variable fields
+		ID    uint   `gorm:"primaryKey;autoIncrement"`
+		Ptype string `gorm:"size:16"`
+		V0    string `gorm:"size:128"`
+		V1    string `gorm:"size:128"`
+		V2    string `gorm:"size:256"`
+		DeletedAt gorm.DeletedAt
+	}
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/casbin/gorm-adapter)](https://goreportcard.com/report/github.com/casbin/gorm-adapter)
-[![Build Status](https://travis-ci.com/casbin/gorm-adapter.svg?branch=master)](https://travis-ci.com/casbin/gorm-adapter)
-[![Coverage Status](https://coveralls.io/repos/github/casbin/gorm-adapter/badge.svg?branch=master)](https://coveralls.io/github/casbin/gorm-adapter?branch=master)
-[![Godoc](https://godoc.org/github.com/casbin/gorm-adapter?status.svg)](https://godoc.org/github.com/casbin/gorm-adapter)
-[![Release](https://img.shields.io/github/release/casbin/gorm-adapter.svg)](https://github.com/casbin/gorm-adapter/releases/latest)
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/casbin/lobby)
-[![Sourcegraph](https://sourcegraph.com/github.com/casbin/gorm-adapter/-/badge.svg)](https://sourcegraph.com/github.com/casbin/gorm-adapter?badge)
+	// Create an adapter
+	a, _ := NewAdapterByDBWithCustomTable(db, &TestCasbinRule{}, "test_casbin_rule")
+	//...
+```
+
+Background for why we create a new fork:
+
+[casbin/gorm-adapter#179 (comment)](https://github.com/casbin/gorm-adapter/issues/179#issuecomment-1228530939)
+
+[casbin/gorm-adapter#168 (comment)](https://github.com/casbin/gorm-adapter/pull/168#issuecomment-1228556830) 
+
+
+# About Gorm Adapter
 
 Gorm Adapter is the [Gorm](https://gorm.io/gorm) adapter for [Casbin](https://github.com/casbin/casbin). With this library, Casbin can load policy from Gorm supported database or save policy to it.
 
