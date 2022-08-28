@@ -157,14 +157,12 @@ func initAdapterWithGormInstance(t *testing.T, db *gorm.DB) *Adapter {
 
 func initAdapterWithGormInstanceAndCustomTable(t *testing.T, db *gorm.DB) *Adapter {
 	type TestCasbinRule struct {
-		ID    uint   `gorm:"primaryKey;autoIncrement"`
-		Ptype string `gorm:"size:128;uniqueIndex:unique_index"`
-		V0    string `gorm:"size:128;uniqueIndex:unique_index"`
-		V1    string `gorm:"size:128;uniqueIndex:unique_index"`
-		V2    string `gorm:"size:128;uniqueIndex:unique_index"`
-		V3    string `gorm:"size:128;uniqueIndex:unique_index"`
-		V4    string `gorm:"size:128;uniqueIndex:unique_index"`
-		V5    string `gorm:"size:128;uniqueIndex:unique_index"`
+		ID        uint   `gorm:"primaryKey;autoIncrement"`
+		Ptype     string `gorm:"size:128;uniqueIndex:unique_index"`
+		V0        string `gorm:"size:128;uniqueIndex:unique_index"`
+		V1        string `gorm:"size:128;uniqueIndex:unique_index"`
+		V2        string `gorm:"size:128;uniqueIndex:unique_index"`
+		DeletedAt gorm.DeletedAt
 	}
 
 	// Create an adapter
@@ -253,6 +251,85 @@ func initAdapterWithGormInstanceByPrefixAndName(t *testing.T, db *gorm.DB, prefi
 	return a
 }
 
+func TestSoftDelete(t *testing.T) {
+	type TestCasbinRule struct {
+		CasbinRule
+		DeletedAt gorm.DeletedAt
+		//CreatedAt  time.Time
+	}
+
+	// Start preparing
+	db, err := gorm.Open(mysql.Open("root:@tcp(127.0.0.1:3306)/casbin?parseTime=true"), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	a, err := NewAdapterByDBWithCustomTable(db, &TestCasbinRule{}, "casbin_create_custom")
+	if err != nil {
+		panic(err)
+	}
+
+	initPolicy(t, a)
+
+	e, err := casbin.NewEnforcer("examples/rbac_model.conf", a)
+	if err != nil {
+		panic(err)
+	}
+	e.EnableAutoSave(true)
+	// End of preparation.
+
+	// Test Add & delete policy
+	ok, err := e.AddPolicy("carol", "data1", "read")
+	assert.Nil(t, err)
+	assert.Equal(t, ok, true)
+
+	ok, err = e.RemovePolicy("bob", "data2", "write")
+	assert.Nil(t, err)
+	assert.Equal(t, ok, true)
+
+	e.ClearPolicy()
+	err = a.LoadPolicy(e.GetModel())
+	assert.Nil(t, err)
+
+	testGetPolicy(t, e, [][]string{
+		{"alice", "data1", "read"},
+		//{"bob", "data2", "write"},
+		{"data2_admin", "data2", "read"},
+		{"data2_admin", "data2", "write"},
+		{"carol", "data1", "read"},
+	})
+
+	res := TestCasbinRule{}
+	err = a.db.Unscoped().Find(&res, "ptype = ? and v0 = ? and v1 = ? and v2 = ?", "p", "bob", "data2", "write").Error
+	assert.Nil(t, err)
+	assert.NotNil(t, res.DeletedAt)
+	log.Print("SoftDeletedRecord: ", res)
+
+	// Test LoadFilteredPolicy
+	e.ClearPolicy()
+	err = a.LoadFilteredPolicy(e.GetModel(), Filter{
+		V0: []string{"bob", "alice", "carol"},
+	})
+	assert.Nil(t, err)
+
+	testGetPolicy(t, e, [][]string{
+		{"alice", "data1", "read"},
+		{"carol", "data1", "read"},
+	})
+
+	//Test Update
+	_, err = e.UpdateFilteredPolicies([][]string{{"alice", "data1", "write"}}, 0, "alice", "data1", "read")
+	assert.Nil(t, err)
+
+	e.LoadPolicy()
+	testGetPolicyWithoutOrder(t, e, [][]string{
+		{"alice", "data1", "write"},
+		{"data2_admin", "data2", "read"},
+		{"data2_admin", "data2", "write"},
+		{"carol", "data1", "read"},
+	})
+}
+
 func TestNilField(t *testing.T) {
 	a, err := NewAdapter("sqlite3", "test.db")
 	assert.Nil(t, err)
@@ -334,9 +411,9 @@ func testFilteredPolicy(t *testing.T, a *Adapter) {
 	testGetPolicy(t, e, [][]string{{"alice", "data1", "read"}, {"bob", "data2", "write"}})
 
 	assert.Nil(t, e.LoadFilteredPolicy(BatchFilter{
-		filters: []Filter{
-			{V0: []string{"alice"}},
-			{V1: []string{"data2"}},
+		filters: []interface{}{
+			Filter{V0: []string{"alice"}},
+			Filter{V1: []string{"data2"}},
 		},
 	}))
 	testGetPolicy(t, e, [][]string{
