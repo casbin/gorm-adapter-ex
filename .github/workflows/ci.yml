@@ -2,7 +2,7 @@ name: Go
 
 on:
   push:
-    branches: [ master ]
+    branches: []
   pull_request:
     branches: [ master ]
 
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Run semantic-release
-        if: github.repository == 'casbin/gorm-adapter' && github.event_name == 'push'
+        if: github.repository == 'casbin/gorm-adapter-ex' && github.event_name == 'push'
         run: |
           npm install --save-dev semantic-release@17.2.4
           npx semantic-release
